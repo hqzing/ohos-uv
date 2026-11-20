@@ -1,0 +1,39 @@
+name: build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: ghcr.io/hqzing/dockerharmony:latest
+      volumes:
+        - /opt/node24:/__e/node24:rw,rshared
+    steps:
+      - name: Setup Node.js for actions
+        run: |
+          curl -fsSLO https://github.com/hqzing/ohos-node/releases/download/v24.2.0/node-v24.2.0-openharmony-arm64.tar.gz
+          mkdir -p /opt/node24-extract /__e/node24/bin
+          tar -zxf node-v24.2.0-openharmony-arm64.tar.gz -C /opt/node24-extract
+          ln -sf /opt/node24-extract/node-v24.2.0-openharmony-arm64/bin/node /__e/node24/bin/node
+          rm node-v24.2.0-openharmony-arm64.tar.gz
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build uv
+        run: ./build.sh --jobs "$(nproc)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: uv
+          path: dist/*.tar.gz
+          retention-days: 1

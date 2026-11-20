@@ -1,0 +1,5 @@
+/dist/
+.build/
+.tools/
+.tmp*/
+__pycache__/

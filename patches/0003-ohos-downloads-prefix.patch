@@ -1,0 +1,41 @@
+diff --git a/crates/uv-python-managed/src/downloads.rs b/crates/uv-python-managed/src/downloads.rs
+index 8358833..c1e4705 100644
+--- a/crates/uv-python-managed/src/downloads.rs
++++ b/crates/uv-python-managed/src/downloads.rs
+@@ -182,9 +182,9 @@ impl RetriableError for Error {
+     }
+ }
+ 
+-/// The URL prefix used by `python-build-standalone` releases on GitHub.
++/// The URL prefix used by the ohos-python releases on GitHub.
+ const CPYTHON_DOWNLOADS_URL_PREFIX: &str =
+-    "https://github.com/astral-sh/python-build-standalone/releases/download/";
++    "https://github.com/ohos-python/ohos-python/releases/download/";
+ 
+ /// The suffix appended to the Astral mirror base for `python-build-standalone` releases.
+ const CPYTHON_MIRROR_SUFFIX: &str = "/github/python-build-standalone/releases/download/";
+@@ -818,18 +818,16 @@ impl ManagedPythonDownload {
+                         format!("{}/{}", mirror.trim_end_matches('/'), suffix).as_str(),
+                     )?]);
+                 }
+-                // No user mirror: try the default/custom Astral mirror first.
++                // Without a custom Astral mirror, use canonical GitHub directly.
+                 if let Some(suffix) = self.url.strip_prefix(CPYTHON_DOWNLOADS_URL_PREFIX) {
++                    if astral_mirror_url.is_none() {
++                        return Ok(vec![SafeUrl::parse(&self.url)?]);
++                    }
+                     let effective_mirror = effective_cpython_mirror(astral_mirror_url);
+                     let mirror_url = SafeUrl::parse(
+                         format!("{}/{}", effective_mirror.trim_end_matches('/'), suffix).as_str(),
+                     )?;
+-                    // When a custom Astral mirror is set, use it exclusively.
+-                    if astral_mirror_url.is_some() {
+-                        return Ok(vec![mirror_url]);
+-                    }
+-                    // Otherwise fall back to the canonical GitHub URL.
+-                    let canonical_url = SafeUrl::parse(&self.url)?;
+-                    return Ok(vec![mirror_url, canonical_url]);
++                    // A custom Astral mirror is used exclusively.
++                    return Ok(vec![mirror_url]);
+                 }
+             }

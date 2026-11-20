@@ -1,0 +1,72 @@
+diff --git a/crates/uv-performance-memory-allocator/Cargo.toml b/crates/uv-performance-memory-allocator/Cargo.toml
+index dc4d677..6954805 100644
+--- a/crates/uv-performance-memory-allocator/Cargo.toml
++++ b/crates/uv-performance-memory-allocator/Cargo.toml
+@@ -19,5 +19,5 @@ workspace = true
+ [target.'cfg(all(target_os = "windows"))'.dependencies]
+ mimalloc = { version = "0.1.50", default-features = false, features = ["v2"] }
+ 
+-[target.'cfg(all(not(target_os = "windows"), not(target_os = "openbsd"), not(target_os = "freebsd"), any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "powerpc64")))'.dependencies]
++[target.'cfg(all(not(target_os = "windows"), not(target_os = "openbsd"), not(target_os = "freebsd"), not(target_env = "ohos"), any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "powerpc64")))'.dependencies]
+ tikv-jemallocator = { version = "0.6.0", default-features = false, features = ["background_threads_runtime_support"] }
+diff --git a/crates/uv-performance-memory-allocator/src/lib.rs b/crates/uv-performance-memory-allocator/src/lib.rs
+index 03ec650..5cfff32 100644
+--- a/crates/uv-performance-memory-allocator/src/lib.rs
++++ b/crates/uv-performance-memory-allocator/src/lib.rs
+@@ -9,6 +9,8 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+     not(target_os = "windows"),
+     not(target_os = "openbsd"),
+     not(target_os = "freebsd"),
++    // `tikv-jemalloc-sys` cannot build for OpenHarmony targets.
++    not(target_env = "ohos"),
+     any(
+         target_arch = "x86_64",
+         target_arch = "aarch64",
+diff --git a/crates/uv-platform/src/libc.rs b/crates/uv-platform/src/libc.rs
+index ae2dced..dba9f1b 100644
+--- a/crates/uv-platform/src/libc.rs
++++ b/crates/uv-platform/src/libc.rs
+@@ -69,6 +69,12 @@ impl Libc {
+             {
+                 Self::from_str(&libc)
+             }
++            // On OpenHarmony, `rustc` reports `target_os = "linux"` and
++            // `target_env = "ohos"`. Skip the runtime ELF interpreter detection,
++            // which would misidentify the musl-derived libc as musl.
++            "linux" if cfg!(target_env = "ohos") => {
++                Ok(Self::Some(target_lexicon::Environment::Ohos))
++            }
+             "linux" => Ok(Self::Some(match detect_linux_libc()? {
+                 LibcVersion::Manylinux { .. } => match env::consts::ARCH {
+                     "arm" | "armv5te" | "armv7" => match detect_hardware_floating_point_support() {
+@@ -116,6 +122,7 @@ impl FromStr for Libc {
+             "musl" => Ok(Self::Some(target_lexicon::Environment::Musl)),
+             "musleabi" => Ok(Self::Some(target_lexicon::Environment::Musleabi)),
+             "musleabihf" => Ok(Self::Some(target_lexicon::Environment::Musleabihf)),
++            "ohos" => Ok(Self::Some(target_lexicon::Environment::Ohos)),
+             "none" => Ok(Self::None),
+             _ => Err(crate::Error::UnknownLibc(s.to_string())),
+         }
+@@ -139,6 +146,7 @@ impl From<&uv_platform_tags::Os> for Libc {
+             uv_platform_tags::Os::Pyodide { .. } | uv_platform_tags::Os::PyEmscripten { .. } => {
+                 Self::Some(target_lexicon::Environment::Musl)
+             }
++            uv_platform_tags::Os::Ohos => Self::Some(target_lexicon::Environment::Ohos),
+             _ => Self::None,
+         }
+     }
+@@ -503,6 +511,14 @@ Usage: /lib/ld-musl-x86_64.so.1 [options] [--] pathname [args]\
+         assert_eq!(got, LibcVersion::Musllinux { major: 1, minor: 2 });
+     }
+ 
++    #[test]
++    fn parse_libc_ohos() {
++        let libc = Libc::from_str("ohos").unwrap();
++        assert_eq!(libc, Libc::Some(target_lexicon::Environment::Ohos));
++        assert_eq!(libc.to_string(), "ohos");
++        assert!(!libc.is_musl());
++    }
++
+     #[test]
+     fn dynamic_linker_candidates_prefer_glibc_before_musl() {
+         assert_eq!(

@@ -1,0 +1,65 @@
+name: release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: ghcr.io/hqzing/dockerharmony:latest
+      volumes:
+        - /opt/node24:/__e/node24:rw,rshared
+    steps:
+      - name: Setup Node.js for actions
+        run: |
+          curl -fsSLO https://github.com/hqzing/ohos-node/releases/download/v24.2.0/node-v24.2.0-openharmony-arm64.tar.gz
+          mkdir -p /opt/node24-extract /__e/node24/bin
+          tar -zxf node-v24.2.0-openharmony-arm64.tar.gz -C /opt/node24-extract
+          ln -sf /opt/node24-extract/node-v24.2.0-openharmony-arm64/bin/node /__e/node24/bin/node
+          rm node-v24.2.0-openharmony-arm64.tar.gz
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build uv
+        run: ./build.sh --jobs "$(nproc)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: uv
+          path: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: uv
+          path: dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(cat version.txt)-$(cat revision.txt)
+          if ! gh release create "v$version" \
+            --repo "${{ github.repository }}" \
+            --title "v$version" \
+            --notes "uv v$version for OpenHarmony." \
+            dist/*.tar.gz dist/SHA256SUMS; then
+            gh release upload "v$version" --repo "${{ github.repository }}" \
+              --clobber dist/*.tar.gz dist/SHA256SUMS
+          fi

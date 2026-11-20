@@ -1,0 +1,173 @@
+diff --git a/crates/uv-distribution-types/src/minimum_libc_version.rs b/crates/uv-distribution-types/src/minimum_libc_version.rs
+index a5f83ad..5411153 100644
+--- a/crates/uv-distribution-types/src/minimum_libc_version.rs
++++ b/crates/uv-distribution-types/src/minimum_libc_version.rs
+@@ -50,7 +50,8 @@ impl MinimumLibcVersion {
+             | PlatformTag::Solaris { .. }
+             | PlatformTag::Pyodide { .. }
+             | PlatformTag::PyEmscripten { .. }
+-            | PlatformTag::Ios { .. } => return [true; 2],
++            | PlatformTag::Ios { .. }
++            | PlatformTag::Ohos { .. } => return [true; 2],
+         };
+         [
+             self.glibc.is_none_or(|version| glibc <= version),
+diff --git a/crates/uv-platform-tags/src/platform.rs b/crates/uv-platform-tags/src/platform.rs
+index e451271..dca8fad 100644
+--- a/crates/uv-platform-tags/src/platform.rs
++++ b/crates/uv-platform-tags/src/platform.rs
+@@ -114,6 +114,7 @@ impl Platform {
+             Os::Haiku { .. } => "Haiku",
+             Os::Android { .. } => "Android",
+             Os::Ios { .. } => "iOS",
++            Os::Ohos => "OpenHarmony",
+         };
+         format!("{os} {}", self.arch())
+     }
+@@ -171,6 +172,8 @@ pub enum Os {
+         minor: u16,
+         simulator: bool,
+     },
++    /// OpenHarmony (`ohos_aarch64` wheels).
++    Ohos,
+ }
+ 
+ impl fmt::Display for Os {
+@@ -190,6 +193,7 @@ impl fmt::Display for Os {
+             Self::Pyodide { .. } => write!(f, "pyodide"),
+             Self::PyEmscripten { .. } => write!(f, "pyemscripten"),
+             Self::Ios { .. } => write!(f, "ios"),
++            Self::Ohos => write!(f, "ohos"),
+         }
+     }
+ }
+diff --git a/crates/uv-platform-tags/src/platform_tag.rs b/crates/uv-platform-tags/src/platform_tag.rs
+index 613c1c2..9b2c98c 100644
+--- a/crates/uv-platform-tags/src/platform_tag.rs
++++ b/crates/uv-platform-tags/src/platform_tag.rs
+@@ -126,6 +126,8 @@ pub enum PlatformTag {
+         /// Not to be confused with the Linux mulitarch concept.
+         multiarch: IosMultiarch,
+     },
++    /// Ex) `ohos_aarch64`
++    Ohos { arch: Arch },
+ }
+ 
+ impl PlatformTag {
+@@ -155,6 +157,7 @@ impl PlatformTag {
+             Self::Pyodide { .. } => Some("Pyodide"),
+             Self::PyEmscripten { .. } => Some("Emscripten"),
+             Self::Ios { .. } => Some("iOS"),
++            Self::Ohos { .. } => Some("OpenHarmony"),
+         }
+     }
+ }
+@@ -479,6 +482,7 @@ impl std::fmt::Display for PlatformTag {
+                 minor,
+                 multiarch,
+             } => write!(f, "ios_{major}_{minor}_{multiarch}"),
++            Self::Ohos { arch } => write!(f, "ohos_{arch}"),
+         }
+     }
+ }
+@@ -590,6 +594,17 @@ impl FromStr for PlatformTag {
+             return Ok(Self::Linux { arch });
+         }
+ 
++        if let Some(rest) = s.strip_prefix("ohos_") {
++            // Ex) ohos_aarch64
++            let arch = rest
++                .parse()
++                .map_err(|_| ParsePlatformTagError::InvalidArch {
++                    platform: "ohos",
++                    tag: s.to_string(),
++                })?;
++            return Ok(Self::Ohos { arch });
++        }
++
+         if let Some(rest) = s.strip_prefix("musllinux_") {
+             // Ex) musllinux_1_1_x86_64
+             let first_underscore = memchr::memchr(b'_', rest.as_bytes()).ok_or_else(|| {
+diff --git a/crates/uv-platform-tags/src/tags.rs b/crates/uv-platform-tags/src/tags.rs
+index c21d3da..aedb35e 100644
+--- a/crates/uv-platform-tags/src/tags.rs
++++ b/crates/uv-platform-tags/src/tags.rs
+@@ -898,6 +898,10 @@ fn compatible_tags(platform: &Platform) -> Result<Vec<PlatformTag>, PlatformErro
+ 
+             platform_tags
+         }
++        (Os::Ohos, _) => {
++            // OpenHarmony wheels use a plain, unversioned `ohos_<arch>` tag.
++            vec![PlatformTag::Ohos { arch }]
++        }
+         _ => {
+             return Err(PlatformError::OsVersionDetectionError(format!(
+                 "Unsupported operating system and architecture combination: {os} {arch}"
+diff --git a/crates/uv-platform/src/os.rs b/crates/uv-platform/src/os.rs
+index d714d86..b9af17f 100644
+--- a/crates/uv-platform/src/os.rs
++++ b/crates/uv-platform/src/os.rs
+@@ -91,7 +91,9 @@ impl From<&uv_platform_tags::Os> for Os {
+             }
+             uv_platform_tags::Os::Manylinux { .. }
+             | uv_platform_tags::Os::Musllinux { .. }
+-            | uv_platform_tags::Os::Android { .. } => {
++            | uv_platform_tags::Os::Android { .. }
++            // OpenHarmony targets the Linux kernel ABI (`aarch64-unknown-linux-ohos`).
++            | uv_platform_tags::Os::Ohos => {
+                 Self::new(target_lexicon::OperatingSystem::Linux)
+             }
+             uv_platform_tags::Os::NetBsd { .. } => {
+diff --git a/crates/uv-python-interpreter/python/get_interpreter_info.py b/crates/uv-python-interpreter/python/get_interpreter_info.py
+index 16337ac..e8256c1 100644
+--- a/crates/uv-python-interpreter/python/get_interpreter_info.py
++++ b/crates/uv-python-interpreter/python/get_interpreter_info.py
+@@ -585,6 +585,14 @@ def get_operating_system_and_architecture():
+             "name": "android",
+             "api_level": sys.getandroidapilevel(),
+         }
++    elif operating_system == "ohos":
++        # OpenHarmony: sysconfig.get_platform() returns "ohos-<arch>". The libc
++        # is musl-derived but must NOT be reported as musllinux (the musl
++        # detection above would misidentify it); wheels use the plain
++        # `ohos_<arch>` platform tag.
++        operating_system = {
++            "name": "ohos",
++        }
+     elif operating_system in [
+         "freebsd",
+         "netbsd",
+diff --git a/crates/uv-torch/src/backend.rs b/crates/uv-torch/src/backend.rs
+index 5e7423a..5757c31 100644
+--- a/crates/uv-torch/src/backend.rs
++++ b/crates/uv-torch/src/backend.rs
+@@ -404,7 +404,8 @@ impl TorchStrategy {
+                     | Os::Android { .. }
+                     | Os::Pyodide { .. }
+                     | Os::PyEmscripten { .. }
+-                    | Os::Ios { .. } => {
++                    | Os::Ios { .. }
++                    | Os::Ohos => {
+                         Either::Right(Either::Left(std::iter::once(TorchBackend::Cpu.index_url())))
+                     }
+                 }
+@@ -436,7 +437,8 @@ impl TorchStrategy {
+                 | Os::Android { .. }
+                 | Os::Pyodide { .. }
+                 | Os::PyEmscripten { .. }
+-                | Os::Ios { .. } => {
++                | Os::Ios { .. }
++                | Os::Ohos => {
+                     Either::Right(Either::Left(std::iter::once(TorchBackend::Cpu.index_url())))
+                 }
+             },
+@@ -455,7 +457,8 @@ impl TorchStrategy {
+                 | Os::Android { .. }
+                 | Os::Pyodide { .. }
+                 | Os::PyEmscripten { .. }
+-                | Os::Ios { .. } => {
++                | Os::Ios { .. }
++                | Os::Ohos => {
+                     Either::Right(Either::Left(std::iter::once(TorchBackend::Cpu.index_url())))
+                 }
+             },
