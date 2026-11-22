@@ -23,7 +23,7 @@ index 03ec650..5cfff32 100644
          target_arch = "x86_64",
          target_arch = "aarch64",
 diff --git a/crates/uv-platform/src/libc.rs b/crates/uv-platform/src/libc.rs
-index ae2dced..dba9f1b 100644
+index ae2dced..a49e2f1 100644
 --- a/crates/uv-platform/src/libc.rs
 +++ b/crates/uv-platform/src/libc.rs
 @@ -69,6 +69,12 @@ impl Libc {
@@ -51,7 +51,7 @@ index ae2dced..dba9f1b 100644
              uv_platform_tags::Os::Pyodide { .. } | uv_platform_tags::Os::PyEmscripten { .. } => {
                  Self::Some(target_lexicon::Environment::Musl)
              }
-+            uv_platform_tags::Os::Ohos => Self::Some(target_lexicon::Environment::Ohos),
++            uv_platform_tags::Os::Ohos { .. } => Self::Some(target_lexicon::Environment::Ohos),
              _ => Self::None,
          }
      }

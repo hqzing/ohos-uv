@@ -13,44 +13,46 @@ index a5f83ad..5411153 100644
          [
              self.glibc.is_none_or(|version| glibc <= version),
 diff --git a/crates/uv-platform-tags/src/platform.rs b/crates/uv-platform-tags/src/platform.rs
-index e451271..dca8fad 100644
+index e451271..97399cf 100644
 --- a/crates/uv-platform-tags/src/platform.rs
 +++ b/crates/uv-platform-tags/src/platform.rs
 @@ -114,6 +114,7 @@ impl Platform {
              Os::Haiku { .. } => "Haiku",
              Os::Android { .. } => "Android",
              Os::Ios { .. } => "iOS",
-+            Os::Ohos => "OpenHarmony",
++            Os::Ohos { .. } => "OpenHarmony",
          };
          format!("{os} {}", self.arch())
      }
-@@ -171,6 +172,8 @@ pub enum Os {
+@@ -171,6 +172,10 @@ pub enum Os {
          minor: u16,
          simulator: bool,
      },
-+    /// OpenHarmony (`ohos_aarch64` wheels).
-+    Ohos,
++    /// OpenHarmony (`ohos_26_aarch64` wheels).
++    Ohos {
++        api_level: u16,
++    },
  }
  
  impl fmt::Display for Os {
-@@ -190,6 +193,7 @@ impl fmt::Display for Os {
+@@ -190,6 +195,7 @@ impl fmt::Display for Os {
              Self::Pyodide { .. } => write!(f, "pyodide"),
              Self::PyEmscripten { .. } => write!(f, "pyemscripten"),
              Self::Ios { .. } => write!(f, "ios"),
-+            Self::Ohos => write!(f, "ohos"),
++            Self::Ohos { .. } => write!(f, "ohos"),
          }
      }
  }
 diff --git a/crates/uv-platform-tags/src/platform_tag.rs b/crates/uv-platform-tags/src/platform_tag.rs
-index 613c1c2..9b2c98c 100644
+index 613c1c2..ef2faff 100644
 --- a/crates/uv-platform-tags/src/platform_tag.rs
 +++ b/crates/uv-platform-tags/src/platform_tag.rs
 @@ -126,6 +126,8 @@ pub enum PlatformTag {
          /// Not to be confused with the Linux mulitarch concept.
          multiarch: IosMultiarch,
      },
-+    /// Ex) `ohos_aarch64`
-+    Ohos { arch: Arch },
++    /// Ex) `ohos_26_aarch64`
++    Ohos { api_level: u16, arch: Arch },
  }
  
  impl PlatformTag {
@@ -66,45 +68,72 @@ index 613c1c2..9b2c98c 100644
                  minor,
                  multiarch,
              } => write!(f, "ios_{major}_{minor}_{multiarch}"),
-+            Self::Ohos { arch } => write!(f, "ohos_{arch}"),
++            Self::Ohos { api_level, arch } => write!(f, "ohos_{api_level}_{arch}"),
          }
      }
  }
-@@ -590,6 +594,17 @@ impl FromStr for PlatformTag {
+@@ -590,6 +594,41 @@ impl FromStr for PlatformTag {
              return Ok(Self::Linux { arch });
          }
  
 +        if let Some(rest) = s.strip_prefix("ohos_") {
-+            // Ex) ohos_aarch64
-+            let arch = rest
++            // Ex) ohos_26_aarch64
++            let underscore = memchr::memchr(b'_', rest.as_bytes()).ok_or_else(|| {
++                ParsePlatformTagError::InvalidFormat {
++                    platform: "ohos",
++                    tag: s.to_string(),
++                }
++            })?;
++
++            let api_level =
++                rest[..underscore]
++                    .parse()
++                    .map_err(|_| ParsePlatformTagError::InvalidApiLevel {
++                        platform: "ohos",
++                        tag: s.to_string(),
++                    })?;
++
++            let arch_str = &rest[underscore + 1..];
++            if arch_str.is_empty() {
++                return Err(ParsePlatformTagError::InvalidFormat {
++                    platform: "ohos",
++                    tag: s.to_string(),
++                });
++            }
++
++            let arch = arch_str
 +                .parse()
 +                .map_err(|_| ParsePlatformTagError::InvalidArch {
 +                    platform: "ohos",
 +                    tag: s.to_string(),
 +                })?;
-+            return Ok(Self::Ohos { arch });
++
++            return Ok(Self::Ohos { api_level, arch });
 +        }
 +
          if let Some(rest) = s.strip_prefix("musllinux_") {
              // Ex) musllinux_1_1_x86_64
              let first_underscore = memchr::memchr(b'_', rest.as_bytes()).ok_or_else(|| {
 diff --git a/crates/uv-platform-tags/src/tags.rs b/crates/uv-platform-tags/src/tags.rs
-index c21d3da..aedb35e 100644
+index c21d3da..71e49d7 100644
 --- a/crates/uv-platform-tags/src/tags.rs
 +++ b/crates/uv-platform-tags/src/tags.rs
-@@ -898,6 +898,10 @@ fn compatible_tags(platform: &Platform) -> Result<Vec<PlatformTag>, PlatformErro
+@@ -898,6 +898,13 @@ fn compatible_tags(platform: &Platform) -> Result<Vec<PlatformTag>, PlatformErro
  
              platform_tags
          }
-+        (Os::Ohos, _) => {
-+            // OpenHarmony wheels use a plain, unversioned `ohos_<arch>` tag.
-+            vec![PlatformTag::Ohos { arch }]
++        (Os::Ohos { api_level }, arch) => {
++            // OpenHarmony wheels use the exact API level of the Python build.
++            vec![PlatformTag::Ohos {
++                api_level: *api_level,
++                arch,
++            }]
 +        }
          _ => {
              return Err(PlatformError::OsVersionDetectionError(format!(
                  "Unsupported operating system and architecture combination: {os} {arch}"
 diff --git a/crates/uv-platform/src/os.rs b/crates/uv-platform/src/os.rs
-index d714d86..b9af17f 100644
+index d714d86..a3eeeef 100644
 --- a/crates/uv-platform/src/os.rs
 +++ b/crates/uv-platform/src/os.rs
 @@ -91,7 +91,9 @@ impl From<&uv_platform_tags::Os> for Os {
@@ -114,31 +143,32 @@ index d714d86..b9af17f 100644
 -            | uv_platform_tags::Os::Android { .. } => {
 +            | uv_platform_tags::Os::Android { .. }
 +            // OpenHarmony targets the Linux kernel ABI (`aarch64-unknown-linux-ohos`).
-+            | uv_platform_tags::Os::Ohos => {
++            | uv_platform_tags::Os::Ohos { .. } => {
                  Self::new(target_lexicon::OperatingSystem::Linux)
              }
              uv_platform_tags::Os::NetBsd { .. } => {
 diff --git a/crates/uv-python-interpreter/python/get_interpreter_info.py b/crates/uv-python-interpreter/python/get_interpreter_info.py
-index 16337ac..e8256c1 100644
+index 16337ac..f204fad 100644
 --- a/crates/uv-python-interpreter/python/get_interpreter_info.py
 +++ b/crates/uv-python-interpreter/python/get_interpreter_info.py
-@@ -585,6 +585,14 @@ def get_operating_system_and_architecture():
+@@ -585,6 +585,15 @@ def get_operating_system_and_architecture():
              "name": "android",
              "api_level": sys.getandroidapilevel(),
          }
 +    elif operating_system == "ohos":
-+        # OpenHarmony: sysconfig.get_platform() returns "ohos-<arch>". The libc
-+        # is musl-derived but must NOT be reported as musllinux (the musl
-+        # detection above would misidentify it); wheels use the plain
-+        # `ohos_<arch>` platform tag.
++        # OpenHarmony: sysconfig.get_platform() returns
++        # "ohos-<api_level>-<arch>". The libc is musl-derived but must NOT be
++        # reported as musllinux (the musl detection above would misidentify it);
++        # wheels use the exact build API in `ohos_<api_level>_<arch>` tags.
 +        operating_system = {
 +            "name": "ohos",
++            "api_level": sysconfig.get_config_var("OHOS_API_LEVEL"),
 +        }
      elif operating_system in [
          "freebsd",
          "netbsd",
 diff --git a/crates/uv-torch/src/backend.rs b/crates/uv-torch/src/backend.rs
-index 5e7423a..5757c31 100644
+index 5e7423a..3258839 100644
 --- a/crates/uv-torch/src/backend.rs
 +++ b/crates/uv-torch/src/backend.rs
 @@ -404,7 +404,8 @@ impl TorchStrategy {
@@ -147,7 +177,7 @@ index 5e7423a..5757c31 100644
                      | Os::PyEmscripten { .. }
 -                    | Os::Ios { .. } => {
 +                    | Os::Ios { .. }
-+                    | Os::Ohos => {
++                    | Os::Ohos { .. } => {
                          Either::Right(Either::Left(std::iter::once(TorchBackend::Cpu.index_url())))
                      }
                  }
@@ -157,7 +187,7 @@ index 5e7423a..5757c31 100644
                  | Os::PyEmscripten { .. }
 -                | Os::Ios { .. } => {
 +                | Os::Ios { .. }
-+                | Os::Ohos => {
++                | Os::Ohos { .. } => {
                      Either::Right(Either::Left(std::iter::once(TorchBackend::Cpu.index_url())))
                  }
              },
@@ -167,7 +197,7 @@ index 5e7423a..5757c31 100644
                  | Os::PyEmscripten { .. }
 -                | Os::Ios { .. } => {
 +                | Os::Ios { .. }
-+                | Os::Ohos => {
++                | Os::Ohos { .. } => {
                      Either::Right(Either::Left(std::iter::once(TorchBackend::Cpu.index_url())))
                  }
              },
