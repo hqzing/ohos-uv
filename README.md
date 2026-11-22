@@ -23,12 +23,12 @@ uv --version
 By default, uv downloads CPython from [ohos-python](https://github.com/ohos-python/ohos-python)'s GitHub Releases, with no configuration required:
 
 ```sh
-uv python install 3.14
+uv python install 3.15
 uv python list
 
 # Users in mainland China can use the AtomGit mirror for faster downloads:
 # export UV_PYTHON_INSTALL_MIRROR=https://atomgit.com/ohos-python/ohos-python/releases/download
-# uv python install 3.14
+# uv python install 3.15
 ```
 
 Free-threaded CPython 3.14 and 3.15 are also available:

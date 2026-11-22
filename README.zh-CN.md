@@ -23,12 +23,12 @@ uv --version
 默认从 [ohos-python](https://github.com/ohos-python/ohos-python) 的 GitHub Releases 下载 CPython 解释器，无需任何配置：
 
 ```sh
-uv python install 3.14
+uv python install 3.15
 uv python list
 
 # 中国大陆用户可使用 AtomGit 镜像加速下载：
 # export UV_PYTHON_INSTALL_MIRROR=https://atomgit.com/ohos-python/ohos-python/releases/download
-# uv python install 3.14
+# uv python install 3.15
 ```
 
 CPython 3.14 和 3.15 也提供 free-threaded 构建：
