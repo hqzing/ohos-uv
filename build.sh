@@ -65,6 +65,33 @@ for p in "$REPO"/patches/*.patch; do
     fi
 done
 
+log "fetch and patch cap-primitives (OHOS: no openat2)"
+# OpenHarmony app sandboxes install a seccomp policy that kills any process
+# calling openat2 (SIGSYS) instead of returning ENOSYS, so cap-std's
+# RESOLVE_BENEATH path must not be used. This is a property of every
+# app-sandboxed process, not of a specific device. The crate is fetched and
+# patched at build time, so the repository only carries the small patch;
+# cap-std then falls back to its manual, openat-based path resolution.
+CAP_VERSION=4.0.3
+CAP_SHA256=8b5f74729fd2f44701d1a8eb47e906cdb3ccd9ec0f02baad85a744b791940b18
+CAP_CRATE="$WORK/cap-primitives-$CAP_VERSION.crate"
+CAP_SRC="$WORK/cap-primitives-$CAP_VERSION"
+if [ ! -f "$CAP_CRATE" ]; then
+    curl -fL --retry 3 -o "$CAP_CRATE" \
+        "https://static.crates.io/crates/cap-primitives/cap-primitives-$CAP_VERSION.crate"
+fi
+echo "$CAP_SHA256  $CAP_CRATE" | sha256sum -c -
+rm -rf "$CAP_SRC"
+mkdir -p "$CAP_SRC"
+tar -C "$CAP_SRC" --strip-components=1 -xzf "$CAP_CRATE"
+patch -p1 -d "$CAP_SRC" < "$REPO/patches/cap-primitives/0001-ohos-no-openat2.patch"
+rm -rf "$SRC/vendor/cap-primitives"
+mkdir -p "$SRC/vendor"
+cp -a "$CAP_SRC" "$SRC/vendor/cap-primitives"
+if ! grep -q '^cap-primitives = { path = "vendor/cap-primitives" }' "$SRC/Cargo.toml"; then
+    printf '\n[patch.crates-io]\ncap-primitives = { path = "vendor/cap-primitives" }\n' >> "$SRC/Cargo.toml"
+fi
+
 log "inject ohos download metadata"
 # Embed the ohos-python catalog so `uv python install` works without
 # UV_PYTHON_DOWNLOADS_JSON_URL. Canonical GitHub URLs are required for
@@ -75,7 +102,7 @@ curl -fL --retry 3 \
 
 log "cargo build --release -p uv (jobs=$JOBS)"
 # cmake is needed by aws-lc-sys; jemalloc is excluded on ohos by the patch.
-cargo build --release --locked -p uv --jobs "$JOBS"
+cargo build --release -p uv --jobs "$JOBS"
 
 BINS=uv
 [ -f target/release/uvx ] && BINS="uv uvx"

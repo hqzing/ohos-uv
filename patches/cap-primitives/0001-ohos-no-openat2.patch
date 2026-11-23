@@ -1,0 +1,19 @@
+--- a/src/rustix/linux/fs/open_impl.rs
++++ b/src/rustix/linux/fs/open_impl.rs
+@@ -58,6 +58,16 @@
+     path: &Path,
+     options: &OpenOptions,
+ ) -> io::Result<fs::File> {
++    // OpenHarmony app sandboxes run a seccomp policy that kills the
++    // process with SIGSYS when `openat2` is invoked, rather than the
++    // ENOSYS older kernels return. Every app-sandboxed process is
++    // affected, so never try it; callers fall back to `manually::open`.
++    #[cfg(target_env = "ohos")]
++    {
++        let _ = (start, path, options);
++        return Err(rustix::io::Errno::NOSYS.into());
++    }
++
+     static INVALID: AtomicBool = AtomicBool::new(false);
+     if INVALID.load(Relaxed) {
+         // `openat2` is permanently unavailable.
