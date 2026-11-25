@@ -9,9 +9,9 @@
 ## 下载与安装
 
 ```sh
-curl -fLO https://github.com/ohos-python/ohos-uv/releases/download/v0.13.9-4/uv-0.13.9-4-aarch64-unknown-linux-ohos.tar.gz
+curl -fLO https://github.com/ohos-python/ohos-uv/releases/download/v0.13.9-5/uv-0.13.9-5-aarch64-unknown-linux-ohos.tar.gz
 # 中国大陆用户可使用 AtomGit 镜像加速下载：
-# curl -fLO https://atomgit.com/ohos-python/ohos-uv/releases/download/v0.13.9-4/uv-0.13.9-4-aarch64-unknown-linux-ohos.tar.gz
+# curl -fLO https://atomgit.com/ohos-python/ohos-uv/releases/download/v0.13.9-5/uv-0.13.9-5-aarch64-unknown-linux-ohos.tar.gz
 
 tar -zxf uv-*.tar.gz -C "$HOME"
 export PATH="$HOME/uv:$PATH"

@@ -9,9 +9,9 @@ uv builds for OpenHarmony.
 ## Download and install
 
 ```sh
-curl -fLO https://github.com/ohos-python/ohos-uv/releases/download/v0.13.9-4/uv-0.13.9-4-aarch64-unknown-linux-ohos.tar.gz
+curl -fLO https://github.com/ohos-python/ohos-uv/releases/download/v0.13.9-5/uv-0.13.9-5-aarch64-unknown-linux-ohos.tar.gz
 # Users in mainland China can use the AtomGit mirror for faster downloads:
-# curl -fLO https://atomgit.com/ohos-python/ohos-uv/releases/download/v0.13.9-4/uv-0.13.9-4-aarch64-unknown-linux-ohos.tar.gz
+# curl -fLO https://atomgit.com/ohos-python/ohos-uv/releases/download/v0.13.9-5/uv-0.13.9-5-aarch64-unknown-linux-ohos.tar.gz
 
 tar -zxf uv-*.tar.gz -C "$HOME"
 export PATH="$HOME/uv:$PATH"
