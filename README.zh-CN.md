@@ -9,9 +9,9 @@
 ## 下载与安装
 
 ```sh
-curl -fLO https://github.com/ohos-python/ohos-uv/releases/download/v0.13.9-5/uv-0.13.9-5-aarch64-unknown-linux-ohos.tar.gz
+curl -fLO https://github.com/ohos-python/ohos-uv/releases/download/v0.13.9-6/uv-0.13.9-6-aarch64-unknown-linux-ohos.tar.gz
 # 中国大陆用户可使用 AtomGit 镜像加速下载：
-# curl -fLO https://atomgit.com/ohos-python/ohos-uv/releases/download/v0.13.9-5/uv-0.13.9-5-aarch64-unknown-linux-ohos.tar.gz
+# curl -fLO https://atomgit.com/ohos-python/ohos-uv/releases/download/v0.13.9-6/uv-0.13.9-6-aarch64-unknown-linux-ohos.tar.gz
 
 tar -zxf uv-*.tar.gz -C "$HOME"
 export PATH="$HOME/uv:$PATH"
@@ -36,6 +36,13 @@ CPython 3.14 和 3.15 也提供 free-threaded 构建：
 ```sh
 uv python install 3.14+freethreaded
 uv python install 3.15+freethreaded
+```
+
+CPython 3.16.0a2 预览版同时提供普通版和 free-threaded 版：
+
+```sh
+uv python install 3.16.0a2
+uv python install 3.16.0a2+freethreaded
 ```
 
 ## 自行构建

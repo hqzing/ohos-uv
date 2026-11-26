@@ -9,9 +9,9 @@ uv builds for OpenHarmony.
 ## Download and install
 
 ```sh
-curl -fLO https://github.com/ohos-python/ohos-uv/releases/download/v0.13.9-5/uv-0.13.9-5-aarch64-unknown-linux-ohos.tar.gz
+curl -fLO https://github.com/ohos-python/ohos-uv/releases/download/v0.13.9-6/uv-0.13.9-6-aarch64-unknown-linux-ohos.tar.gz
 # Users in mainland China can use the AtomGit mirror for faster downloads:
-# curl -fLO https://atomgit.com/ohos-python/ohos-uv/releases/download/v0.13.9-5/uv-0.13.9-5-aarch64-unknown-linux-ohos.tar.gz
+# curl -fLO https://atomgit.com/ohos-python/ohos-uv/releases/download/v0.13.9-6/uv-0.13.9-6-aarch64-unknown-linux-ohos.tar.gz
 
 tar -zxf uv-*.tar.gz -C "$HOME"
 export PATH="$HOME/uv:$PATH"
@@ -36,6 +36,13 @@ Free-threaded CPython 3.14 and 3.15 are also available:
 ```sh
 uv python install 3.14+freethreaded
 uv python install 3.15+freethreaded
+```
+
+CPython 3.16.0a2 preview builds are available in both variants:
+
+```sh
+uv python install 3.16.0a2
+uv python install 3.16.0a2+freethreaded
 ```
 
 ## Build locally
